@@ -40,6 +40,21 @@ module Geocoder
         )
       end
 
+      def dynamic_geocoded_by(address_attr, coordinates_attr, options = {}, &block)
+        # dynamic_geocode_work
+        geocoder_init(
+          :dynamic_geocode => true,
+          :fetched_address => address_attr || :address,
+          :coordinates     => coordinates_attr,
+          :reverse_block   => block,
+          :units           => options[:units],
+          :method          => options[:method],
+          :skip_index      => options[:skip_index] || false,
+          :lookup          => options[:lookup],
+          :language        => options[:language]
+        )
+      end
+
       private # ----------------------------------------------------------------
 
       def geocoder_init(options)
@@ -59,4 +74,3 @@ module Geocoder
     end
   end
 end
-

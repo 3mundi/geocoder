@@ -55,6 +55,16 @@ module Geocoder::Store
       coords.is_a?(Array) ? coords.reverse : []
     end
 
+    def dynamic_geocode
+      # TODO
+      # dynamic_geocode_work
+      if r.coordinates.nil?
+        geocode
+      else
+        reverse_geocode
+      end
+    end
+
     ##
     # Look up coordinates and assign to +latitude+ and +longitude+ attributes
     # (or other as specified in +geocoded_by+). Returns coordinates (array).
@@ -86,4 +96,3 @@ module Geocoder::Store
     end
   end
 end
-
