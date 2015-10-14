@@ -11,37 +11,6 @@ module Geocoder::Store
         scope :not_geocoded, lambda {
           where(geocoder_options[:coordinates] => nil)
         }
-
-        # scope :near, lambda{ |location, *args|
-        #   coords  = Geocoder::Calculations.extract_coordinates(location)
-        #
-        #   # no results if no lat/lon given
-        #   return where(:id => false) unless coords.is_a?(Array)
-        #
-        #   radius  = args.size > 0 ? args.shift : 20
-        #   options = args.size > 0 ? args.shift : {}
-        #   options[:units] ||= geocoder_options[:units]
-        #
-        #   # Use BSON::OrderedHash if Ruby's hashes are unordered.
-        #   # Conditions must be in order required by indexes (see mongo gem).
-        #   version = RUBY_VERSION.split('.').map { |i| i.to_i }
-        #   empty = version[0] < 2 && version[1] < 9 ? BSON::OrderedHash.new : {}
-        #
-        #   conds = empty.clone
-        #   field = geocoder_options[:coordinates]
-        #   conds[field] = empty.clone
-        #   conds[field]["$nearSphere"]  = coords.reverse
-        #
-        #   if radius
-        #     conds[field]["$maxDistance"] = \
-        #       Geocoder::Calculations.distance_to_radians(radius, options[:units])
-        #   end
-        #
-        #   if obj = options[:exclude]
-        #     conds[:_id.ne] = obj.id
-        #   end
-        #   where(conds)
-        # }
       end
     end
 
@@ -51,8 +20,7 @@ module Geocoder::Store
     # even though internally they are stored in the opposite order.
     #
     def to_coordinates
-      coords = send(self.class.geocoder_options[:coordinates])
-      coordinates_adapter(coords)
+      send(self.class.geocoder_options[:coordinates])
     end
 
     ##
@@ -63,7 +31,7 @@ module Geocoder::Store
       do_lookup(false) do |o,rs|
         if r = rs.first
           unless r.coordinates.nil?
-            o.__send__ "#{self.class.geocoder_options[:coordinates]}=", coordinates_adapter(r.coordinates)
+            o.__send__ "#{self.class.geocoder_options[:coordinates]}=", r.coordinates
           end
           r.coordinates
         end
@@ -82,19 +50,6 @@ module Geocoder::Store
           end
           r.address
         end
-      end
-    end
-
-    private
-
-    def coordinates_adapter(coords)
-      case coords.class.name
-      when 'Array'
-        coords
-      when 'Mongoid::Geospatial::Point'
-        coords.to_a
-      else
-        []
       end
     end
   end
