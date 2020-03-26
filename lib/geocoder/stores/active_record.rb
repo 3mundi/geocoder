@@ -28,6 +28,11 @@ module Geocoder::Store
             "OR #{table_name}.#{geocoder_options[:longitude]} IS NULL")
         }
 
+        # scope: not-reverse geocoded objects
+        scope :not_reverse_geocoded, lambda {
+          where("#{table_name}.#{geocoder_options[:fetched_address]} IS NULL")
+        }
+
         ##
         # Find all objects within a radius of the given location.
         # Location may be either a string to geocode or an array of
@@ -55,7 +60,7 @@ module Geocoder::Store
         # corner followed by the northeast corner of the box
         # (<tt>[[sw_lat, sw_lon], [ne_lat, ne_lon]]</tt>).
         #
-        scope :within_bounding_box, lambda{ |bounds|
+        scope :within_bounding_box, lambda{ |*bounds|
           sw_lat, sw_lng, ne_lat, ne_lng = bounds.flatten if bounds
           if sw_lat && sw_lng && ne_lat && ne_lng
             where(Geocoder::Sql.within_bounding_box(
@@ -81,8 +86,6 @@ module Geocoder::Store
           distance_sql(latitude, longitude, *args)
         end
       end
-
-      private # ----------------------------------------------------------------
 
       ##
       # Get options hash suitable for passing to ActiveRecord.find to get
@@ -126,18 +129,31 @@ module Geocoder::Store
         distance_column = options.fetch(:distance_column) { 'distance' }
         bearing_column = options.fetch(:bearing_column)  { 'bearing' }
 
-        b = Geocoder::Calculations.bounding_box([latitude, longitude], radius, options)
+        # If radius is a DB column name, bounding box should include
+        # all rows within the maximum radius appearing in that column.
+        # Note: performance is dependent on variability of radii.
+        bb_radius = radius.is_a?(Symbol) ? maximum(radius) : radius
+        b = Geocoder::Calculations.bounding_box([latitude, longitude], bb_radius, options)
         args = b + [
           full_column_name(latitude_attribute),
           full_column_name(longitude_attribute)
         ]
         bounding_box_conditions = Geocoder::Sql.within_bounding_box(*args)
 
-        if using_sqlite?
+        if using_unextended_sqlite?
           conditions = bounding_box_conditions
         else
           min_radius = options.fetch(:min_radius, 0).to_f
-          conditions = [bounding_box_conditions + " AND (#{distance}) BETWEEN ? AND ?", min_radius, radius]
+          # if radius is a DB column name,
+          # find rows between min_radius and value in column
+          if radius.is_a?(Symbol)
+            c = "BETWEEN ? AND #{radius}"
+            a = [min_radius]
+          else
+            c = "BETWEEN ? AND ?"
+            a = [min_radius, radius]
+          end
+          conditions = [bounding_box_conditions + " AND (#{distance}) " + c] + a
         end
         {
           :select => select_clause(options[:select],
@@ -155,7 +171,7 @@ module Geocoder::Store
       # capabilities (trig functions?).
       #
       def distance_sql(latitude, longitude, options = {})
-        method_prefix = using_sqlite? ? "approx" : "full"
+        method_prefix = using_unextended_sqlite? ? "approx" : "full"
         Geocoder::Sql.send(
           method_prefix + "_distance",
           latitude, longitude,
@@ -174,7 +190,7 @@ module Geocoder::Store
           options[:bearing] = Geocoder.config.distances
         end
         if options[:bearing]
-          method_prefix = using_sqlite? ? "approx" : "full"
+          method_prefix = using_unextended_sqlite? ? "approx" : "full"
           Geocoder::Sql.send(
             method_prefix + "_bearing",
             latitude, longitude,
@@ -220,8 +236,20 @@ module Geocoder::Store
         conditions
       end
 
+      def using_unextended_sqlite?
+        using_sqlite? && !using_sqlite_with_extensions?
+      end
+
       def using_sqlite?
-        connection.adapter_name.match(/sqlite/i)
+        !!connection.adapter_name.match(/sqlite/i)
+      end
+
+      def using_sqlite_with_extensions?
+        connection.adapter_name.match(/sqlite/i) &&
+          defined?(::SqliteExt) &&
+          %W(MOD POWER SQRT PI SIN COS ASIN ATAN2).all?{ |fn_name|
+            connection.raw_connection.function_created?(fn_name)
+          }
       end
 
       def using_postgres?
@@ -239,7 +267,7 @@ module Geocoder::Store
       # Value which can be passed to where() to produce no results.
       #
       def false_condition
-        using_sqlite? ? 0 : "false"
+        using_unextended_sqlite? ? 0 : "false"
       end
 
       ##
@@ -249,6 +277,17 @@ module Geocoder::Store
         column = column.to_s
         column.include?(".") ? column : [table_name, column].join(".")
       end
+    end
+
+    ##
+    # Get nearby geocoded objects.
+    # Takes the same options hash as the near class method (scope).
+    # Returns nil if the object is not geocoded.
+    #
+    def nearbys(radius = 20, options = {})
+      return nil unless geocoded?
+      options.merge!(:exclude => self) unless send(self.class.primary_key).nil?
+      self.class.near(self, radius, options)
     end
 
     ##

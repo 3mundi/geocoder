@@ -3,6 +3,10 @@ require 'test_helper'
 
 class GoogleTest < GeocoderTestCase
 
+  def setup
+    Geocoder.configure(lookup: :google)
+  end
+
   def test_google_result_components
     result = Geocoder.search("Madison Square Garden, New York, NY").first
     assert_equal "Manhattan",
@@ -40,6 +44,23 @@ class GoogleTest < GeocoderTestCase
     result = Geocoder.search("Madison Square Garden, New York, NY").first
     assert_equal "ROOFTOP",
       result.precision
+  end
+
+  def test_google_viewport
+    result = Geocoder.search("Madison Square Garden, New York, NY").first
+    assert_equal [40.7473324, -73.9965316, 40.7536276, -73.9902364],
+      result.viewport
+  end
+
+  def test_google_bounds
+    result = Geocoder.search("new york").first
+    assert_equal [40.4773991, -74.2590899, 40.9175771, -73.7002721],
+      result.bounds
+  end
+
+  def test_google_no_bounds
+    result = Geocoder.search("Madison Square Garden, New York, NY").first
+    assert_equal nil, result.bounds
   end
 
   def test_google_query_url_contains_bounds
@@ -80,4 +101,44 @@ class GoogleTest < GeocoderTestCase
     assert url.include?(formatted), "Expected #{formatted} to be included in #{url}"
   end
 
+  def test_google_query_url_contains_result_type_when_given_as_string
+    lookup = Geocoder::Lookup::Google.new
+    url = lookup.query_url(Geocoder::Query.new(
+      "Some Intersection",
+      :result_type => "country"
+    ))
+    formatted = "result_type=" + CGI.escape("country")
+    assert url.include?(formatted), "Expected #{formatted} to be included in #{url}"
+  end
+
+  def test_google_query_url_contains_result_type_when_given_as_array
+    lookup = Geocoder::Lookup::Google.new
+    url = lookup.query_url(Geocoder::Query.new(
+      "Some Intersection",
+      :result_type => ["country", "postal_code"]
+    ))
+    formatted = "result_type=" + CGI.escape("country|postal_code")
+    assert url.include?(formatted), "Expected #{formatted} to be included in #{url}"
+  end
+
+  def test_google_uses_https_when_api_key_is_set
+    Geocoder.configure(api_key: "deadbeef")
+    query = Geocoder::Query.new("Madison Square Garden, New York, NY")
+    assert_match(/^https:/, query.url)
+  end
+
+  def test_actual_make_api_request_with_https
+    Geocoder.configure(use_https: true, lookup: :google)
+
+    require 'webmock/test_unit'
+    WebMock.enable!
+    stub_all = WebMock.stub_request(:any, /.*/).to_return(status: 200)
+
+    g = Geocoder::Lookup::Google.new
+    g.send(:actual_make_api_request, Geocoder::Query.new('test location'))
+    assert_requested(stub_all)
+
+    WebMock.reset!
+    WebMock.disable!
+  end
 end

@@ -1,3 +1,5 @@
+require 'timeout'
+
 module Geocoder
 
   class Error < StandardError
@@ -27,6 +29,12 @@ module Geocoder
   end
 
   class ServiceUnavailable < Error
+  end
+
+  class LookupTimeout < ::Timeout::Error
+  end
+
+  class NetworkError < Error
   end
 
 end

@@ -8,20 +8,34 @@ module Geocoder::Lookup
       "Telize"
     end
 
-    def query_url(query)
-      "http://www.telize.com/geoip/#{query.sanitized_text}"
+    def required_api_key_parts
+      configuration[:host] ? [] : ["key"]
     end
 
-    # currently doesn't support HTTPS
+    def query_url(query)
+      if configuration[:host]
+        "#{protocol}://#{configuration[:host]}/location/#{query.sanitized_text}"
+      else
+        "#{protocol}://telize-v1.p.mashape.com/location/#{query.sanitized_text}?mashape-key=#{api_key}"
+      end
+    end
+
     def supported_protocols
-      [:http]
+      [].tap do |array|
+        array << :https
+        array << :http if configuration[:host]
+      end
     end
 
     private # ---------------------------------------------------------------
 
+    def cache_key(query)
+      query_url(query)[/(.*)\?.*/, 1]
+    end
+
     def results(query)
-      # don't look up a loopback address, just return the stored result
-      return [reserved_result(query.text)] if query.loopback_ip_address?
+      # don't look up a loopback or private address, just return the stored result
+      return [reserved_result(query.text)] if query.internal_ip_address?
       if (doc = fetch_data(query)).nil? or doc['code'] == 401 or empty_result?(doc)
         []
       else
@@ -34,7 +48,28 @@ module Geocoder::Lookup
     end
 
     def reserved_result(ip)
-      {"message" => "Input string is not a valid IP address", "code" => 401}
+      {
+        "ip" => ip,
+        "latitude" => 0,
+        "longitude" => 0,
+        "city" => "",
+        "timezone" => "",
+        "asn" => 0,
+        "region" => "",
+        "offset" => 0,
+        "organization" => "",
+        "country_code" => "",
+        "country_code3" => "",
+        "postal_code" => "",
+        "continent_code" => "",
+        "country" => "",
+        "region_code" => ""
+      }
     end
+
+    def api_key
+      configuration.api_key
+    end
+
   end
 end

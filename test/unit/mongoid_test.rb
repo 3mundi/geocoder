@@ -8,17 +8,16 @@ class MongoidTest < GeocoderTestCase
     assert p.geocoded?
   end
 
+  def test_geocoded_check_single_coord
+    p = PlaceUsingMongoid.new(*geocoded_object_params(:msg))
+    p.location = [40.750354, nil]
+    assert !p.geocoded?
+  end
+
   def test_distance_to_returns_float
     p = PlaceUsingMongoid.new(*geocoded_object_params(:msg))
     p.location = [40.750354, -73.993371]
     assert p.distance_to([30, -94]).is_a?(Float)
-  end
-
-  def test_custom_coordinate_field_near_scope
-    location = [40.750354, -73.993371]
-    p = PlaceUsingMongoid.near(location)
-    key = Mongoid::VERSION >= "3" ? "location" : :location
-    assert_equal p.selector[key]['$nearSphere'], location.reverse
   end
 
   def test_model_configuration
@@ -33,14 +32,30 @@ class MongoidTest < GeocoderTestCase
   end
 
   def test_index_is_skipped_if_skip_option_flag
-    result = PlaceUsingMongoidWithoutIndex.index_options.keys.flatten[0] == :coordinates
+    if PlaceUsingMongoidWithoutIndex.respond_to?(:index_options)
+      result = PlaceUsingMongoidWithoutIndex.index_options.keys.flatten[0] == :coordinates
+    else
+      result = PlaceUsingMongoidWithoutIndex.index_specifications[0] == :coordinates
+    end
     assert !result
   end
 
-  def test_nil_radius_omits_max_distance
-    location = [40.750354, -73.993371]
-    p = PlaceUsingMongoid.near(location, nil)
-    key = Mongoid::VERSION >= "3" ? "location" : :location
-    assert_equal nil, p.selector[key]['$maxDistance']
+  def test_geocoded_with_custom_handling
+    p = PlaceUsingMongoidWithCustomResultsHandling.new(*geocoded_object_params(:msg))
+    p.location = [40.750354, -73.993371]
+    p.geocode
+    assert_match(/[0-9\.,\-]+/, p.coords_string)
+  end
+
+  def test_reverse_geocoded
+    p = PlaceUsingMongoidReverseGeocoded.new(*reverse_geocoded_object_params(:msg))
+    p.reverse_geocode
+    assert_match(/New York/, p.address)
+  end
+
+  def test_reverse_geocoded_with_custom_handling
+    p = PlaceUsingMongoidReverseGeocodedWithCustomResultsHandling.new(*reverse_geocoded_object_params(:msg))
+    p.reverse_geocode
+    assert_equal "US", p.country.upcase
   end
 end

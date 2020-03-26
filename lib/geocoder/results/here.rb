@@ -17,9 +17,20 @@ module Geocoder::Result
       fail unless d = @data['Location']['DisplayPosition']
       [d['Latitude'].to_f, d['Longitude'].to_f]
     end
+    
+    def route
+      address_data['Street']
+    end
+    
+    def street_number
+      address_data['HouseNumber']
+    end  
 
     def state
-      address_data['County']
+      fail unless d = address_data['AdditionalData']
+      if v = d.find{|ad| ad['key']=='StateName'}
+        return v['value']
+      end
     end
 
     def province
@@ -51,6 +62,15 @@ module Geocoder::Result
 
     def country_code
       address_data['Country']
+    end
+
+    def viewport
+      map_view = data['Location']['MapView'] || fail
+      south = map_view['BottomRight']['Latitude']
+      west = map_view['TopLeft']['Longitude']
+      north = map_view['TopLeft']['Latitude']
+      east = map_view['BottomRight']['Longitude']
+      [south, west, north, east]
     end
 
     private # ----------------------------------------------------------------

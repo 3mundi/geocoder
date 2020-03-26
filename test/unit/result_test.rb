@@ -3,58 +3,24 @@ require 'test_helper'
 
 class ResultTest < GeocoderTestCase
 
-  def test_result_has_required_attributes
+  def test_forward_geocoding_result_has_required_attributes
     Geocoder::Lookup.all_services_except_test.each do |l|
+      next if l == :ip2location # has pay-per-attribute pricing model
       Geocoder.configure(:lookup => l)
       set_api_key!(l)
-      result = Geocoder.search([45.423733, -75.676333]).first
+      result = Geocoder.search("Madison Square Garden").first
       assert_result_has_required_attributes(result)
     end
   end
 
-  def test_yandex_result_without_city_does_not_raise_exception
-    assert_nothing_raised do
-      Geocoder.configure(:lookup => :yandex)
-      set_api_key!(:yandex)
-      result = Geocoder.search("no city and town").first
-      assert_equal "", result.city
-    end
-  end
-
-  def test_yandex_result_without_admin_area_no_exception
-    assert_nothing_raised do
-      Geocoder.configure(:lookup => :yandex)
-      set_api_key!(:yandex)
-      result = Geocoder.search("no administrative area").first
-      assert_equal "", result.city
-    end
-  end
-
-  def test_yandex_result_new_york
-    assert_nothing_raised do
-      Geocoder.configure(:lookup => :yandex)
-      set_api_key!(:yandex)
-      result = Geocoder.search("new york").first
-      assert_equal "", result.city
-    end
-  end
-
-  def test_yandex_result_kind
-    assert_nothing_raised do
-      Geocoder.configure(:lookup => :yandex)
-      set_api_key!(:yandex)
-      ["new york", [45.423733, -75.676333], "no city and town"].each do |query|
-        Geocoder.search("new york").first.kind
-      end
-    end
-  end
-
-  def test_yandex_result_without_locality_name
-    assert_nothing_raised do
-      Geocoder.configure(:lookup => :yandex)
-      set_api_key!(:yandex)
-      result = Geocoder.search("canada rue dupuis 14")[6]
-      assert_equal "", result.city
+  def test_reverse_geocoding_result_has_required_attributes
+    Geocoder::Lookup.all_services_except_test.each do |l|
+      next if l == :ip2location # has pay-per-attribute pricing model
+      next if l == :nationaal_georegister_nl # no reverse geocoding
+      Geocoder.configure(:lookup => l)
+      set_api_key!(l)
+      result = Geocoder.search([45.423733, -75.676333]).first
+      assert_result_has_required_attributes(result)
     end
   end
 

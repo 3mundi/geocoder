@@ -38,6 +38,14 @@ module Geocoder
     data
   end
 
+  ##
+  # Merge the given hash into a lookup's existing configuration.
+  #
+  def self.merge_into_lookup_config(lookup_name, options)
+    base = Geocoder.config[lookup_name]
+    Geocoder.configure(lookup_name => base.merge(options))
+  end
+
   class Configuration
     include Singleton
 
@@ -57,7 +65,8 @@ module Geocoder
       :units,
       :distances,
       :basic_auth,
-      :logger
+      :logger,
+      :kernel_logger_level
     ]
 
     attr_accessor :data
@@ -88,8 +97,8 @@ module Geocoder
 
       # geocoding options
       @data[:timeout]      = 3           # geocoding service timeout (secs)
-      @data[:lookup]       = :google     # name of street address geocoding service (symbol)
-      @data[:ip_lookup]    = :freegeoip  # name of IP address geocoding service (symbol)
+      @data[:lookup]       = :nominatim  # name of street address geocoding service (symbol)
+      @data[:ip_lookup]    = :ipinfo_io  # name of IP address geocoding service (symbol)
       @data[:language]     = :en         # ISO-639 language code
       @data[:http_headers] = {}          # HTTP headers for lookup
       @data[:use_https]    = false       # use HTTPS for lookup requests? (if supported)
@@ -100,10 +109,11 @@ module Geocoder
       @data[:cache_prefix] = "geocoder:" # prefix (string) to use for all cache keys
       @data[:basic_auth]   = {}          # user and password for basic auth ({:user => "user", :password => "password"})
       @data[:logger]       = :kernel     # :kernel or Logger instance
+      @data[:kernel_logger_level] = ::Logger::WARN # log level, if kernel logger is used
 
       # exceptions that should not be rescued by default
       # (if you want to implement custom error handling);
-      # supports SocketError and TimeoutError
+      # supports SocketError and Timeout::Error
       @data[:always_raise] = []
 
       # calculation options
@@ -123,6 +133,5 @@ module Geocoder
       end
       EOS
     end.join("\n\n"))
-
   end
 end
